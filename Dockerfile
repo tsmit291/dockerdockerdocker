@@ -47,6 +47,7 @@ RUN apt-get update -qqy \
 
 RUN apt-get install oracle-java8-set-default
 
+
 #==================================
 # Install Allstate CA certificates
 # =================================
@@ -74,30 +75,41 @@ RUN wget -O - "http://cli.run.pivotal.io/stable?release=linux64-binary&source=gi
 # Install Go
 #===================================
 
-RUN apt-get -y install libxss1 libappindicator1 libindicator7 \
-    && wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
-
-RUN apt-get -y install xvfb
-RUN apt-get -y install unzip
-RUN wget -N http://chromedriver.storage.googleapis.com/2.20/chromedriver_linux64.zip
-RUN unzip chromedriver_linux64.zip
-RUN chmod +x chromedriver
-
-RUN mv -f chromedriver /usr/local/share/chromedriver \
-    && ln -s /usr/local/share/chromedriver /usr/local/bin/chromedriver \
-    && ln -s /usr/local/share/chromedriver /usr/bin/chromedriver
-
-RUN dpkg -i google-chrome*.deb
-RUN apt-get install -f
-
-RUN curl -k "https://storage.googleapis.com/golang/go1.6.2.linux-amd64.tar.gz" \
-    && tar -C /usr/local -xzf go1.6.2.linux-amd64.tar.gz \
-    && rm go1.6.2.linux-amd64.tar.gz \
-    && mkdir ~/go
+RUN wget "https://storage.googleapis.com/golang/go1.6.3.linux-amd64.tar.gz"
+RUN tar -C /usr/local -xzf go1.6.3.linux-amd64.tar.gz
+RUN rm go1.6.3.linux-amd64.tar.gz
+RUN mkdir ~/go
 
 ENV GOPATH=~/go
 ENV PATH=${PATH}:${GOPATH}/bin
 
+
+RUN apt-get install -y unzip xvfb qt5-default libqt5webkit5-dev gstreamer1.0-plugins-base gstreamer1.0-tools gstreamer1.0-x
+
+
+# Install Chrome WebDriver
+RUN CHROMEDRIVER_VERSION='2.21' && \
+    mkdir -p /opt/chromedriver-$CHROMEDRIVER_VERSION && \
+    curl -sS -o /tmp/chromedriver_linux64.zip http://chromedriver.storage.googleapis.com/$CHROMEDRIVER_VERSION/chromedriver_linux64.zip && \
+    unzip -qq /tmp/chromedriver_linux64.zip -d /opt/chromedriver-$CHROMEDRIVER_VERSION && \
+    rm /tmp/chromedriver_linux64.zip && \
+    chmod +x /opt/chromedriver-$CHROMEDRIVER_VERSION/chromedriver && \
+    ln -fs /opt/chromedriver-$CHROMEDRIVER_VERSION/chromedriver /usr/local/bin/chromedriver
+
+
+
+# Install Google Chrome
+RUN curl -sS -o - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add - && \
+echo "deb http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google-chrome.list && \
+apt-get -yqq update && \
+apt-get -yqq install google-chrome-stable && \
+rm -rf /var/lib/apt/lists/*
+
+# Disable the SUID sandbox so that Chrome can launch without being in a privileged container.
+# One unfortunate side effect is that `google-chrome --help` will no longer work.
+RUN dpkg-divert --add --rename --divert /opt/google/chrome/google-chrome.real /opt/google/chrome/google-chrome && \
+echo "#!/bin/bash\nexec /opt/google/chrome/google-chrome.real --disable-setuid-sandbox \"\$@\"" > /opt/google/chrome/google-chrome && \
+chmod 755 /opt/google/chrome/google-chrome
 
 
 #===============
